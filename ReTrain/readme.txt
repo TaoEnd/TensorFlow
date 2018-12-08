@@ -1,0 +1,16 @@
+GoogleNet是包含1000个分类，可以使用它来定制自己需要的分类模型，
+它的最后一层是softmax，在改造模型时，可以对这一层进行处理。
+
+改造时可以直接使用tensorflow中提供的样例代码，即retrain.py
+
+retrain.bat是一个批处理文件，用来改造GoogleNet
+
+bottlenck指的是softmax前面一层的输出数据，原始的GoogleNet中，
+每一张图片经过处理后，在这里都会产生了一个固定的结果值，把整个
+网络看成一个花瓶，那么这里就是一个瓶颈，也就是bottlenck
+
+model_dir指的是inception_v3模型的存放地址
+output_graph指的是结果图存放地址
+
+image_dir指的是用来训练新模型的图片文件夹，每一类图片放在一个
+文件夹里面
