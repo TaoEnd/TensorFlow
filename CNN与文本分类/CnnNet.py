@@ -11,6 +11,7 @@ class CnnNet(object):
         self.x = tf.placeholder(tf.int32, [None, sequence_length], name="input_x")
         self.y = tf.placeholder(tf.float32, [None, num_classes], name="labels")
         self.dropout_keep_prob = tf.placeholder(tf.float32, name="dropout_keep_prob")
+        self.l2_loss = tf.constant(0.0)
 
         with tf.device("/gpu:0"), tf.name_scope("embedding"):
             # 初始化权重
@@ -37,7 +38,7 @@ class CnnNet(object):
                 # 当随机值大于或者小于2倍偏差值时，就丢弃该随机值，重新选择一个
                 # stddev代表标准差
                 w = tf.Variable(tf.truncated_normal(conv_shape, stddev=0.3), name="w")
-                b = tf.Variable(tf.random_normal(shape=[num_convs]), name="b")
+                b = tf.Variable(tf.random_normal(shape=[num_convs], stddev=0.1), name="b")
                 conv = tf.nn.conv2d(self.embedded_chars_expanded, w, strides=[1, 1, 1, 1],
                                     padding="VALID", name="conv")
                 # 将向量b加到矩阵conv的每一行，b与conv中每一行的长度相等
@@ -47,8 +48,30 @@ class CnnNet(object):
                                         strides=[1, 1, 1, 1], padding="VALID", name="pool")
                 pooled_outputs.append(pooled)
 
-        num_convs_tool = num_convs * len(conv_sizes)
+        num_convs_total = num_convs * len(conv_sizes)
         # 在pooled_outputs的第四维上进行连接
-        self.pool = tf.concat(3, pooled_outputs)
+        self.pool = tf.concat(pooled_outputs, 3)
         # 把原本重叠在一起的卷积层全部竖起来放，并且连接在一起，以便后面进行全连接操作
-        self.pool_flat = tf.reshape(self.pool, [-1, num_convs])
+        self.pool_flat = tf.reshape(self.pool, [-1, num_convs_total])
+
+        # dropout
+        with tf.name_scope("dropout"):
+            self.dropout = tf.nn.dropout(self.pool_flat, self.dropout_keep_prob)
+
+        with tf.name_scope("output"):
+            w = tf.Variable(tf.truncated_normal(shape=[num_convs_total, num_classes],
+                                                stddev=0.3), name="w")
+            b = tf.Variable(tf.constant(0.1, shape=[num_classes]), name="b")
+            self.y_pred = tf.nn.xw_plus_b(self.dropout, w, b, name="scores")
+            self.l2_loss += tf.nn.l2_loss(w)
+            self.l2_loss += tf.nn.l2_loss(b)
+
+        with tf.name_scope("cost"):
+            cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.y_pred,
+                                                                          labels=self.y))
+            self.cost = cost + l2_lamda * self.l2_loss
+
+        with tf.name_scope("accuracy"):
+            self.predictions = tf.equal(tf.argmax(self.y_pred, 1),tf.argmax(self.y, 1),
+                                        name="predicitons")
+            self.accuracy = tf.reduce_mean(tf.cast(self.predictions, tf.float32))

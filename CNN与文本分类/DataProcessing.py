@@ -36,3 +36,22 @@ def load_data_and_labels(pos_data_path, neg_data_path):
     neg_labels = [[1, 0] for _ in neg_lines]
     y = np.concatenate([pos_labels, neg_labels], axis=0)
     return [x, y]
+
+# 获得每一个batch的数据
+def get_batch_data(x_train, y_train, batch_size, shuffle=True):
+    x_train = np.array(x_train)
+    y_train = np.array(y_train)
+    data_size = len(x_train)
+    batch_nums = int((data_size-1)/batch_size)+1
+    if shuffle:
+        shuffle_index = np.random.permutation(np.arange(data_size))
+        shuffled_x = x_train[shuffle_index]
+        shuffled_y = y_train[shuffle_index]
+    else:
+        shuffled_x = x_train
+        shuffled_y = y_train
+    for batch_num in range(batch_nums):
+        start_index = batch_num * batch_size
+        end_index = min((batch_num+1)*batch_size, batch_size)
+        # 得到一个关于每个batch的生成器，并返回该生成器
+        yield shuffled_x[start_index: end_index], shuffled_y[start_index: end_index]

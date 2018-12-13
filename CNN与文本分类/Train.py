@@ -5,6 +5,10 @@ from CNN与文本分类 import DataProcessing as dataprocessing
 from tensorflow.contrib import learn
 import numpy as np
 from CNN与文本分类.CnnNet import CnnNet
+import os
+import time
+
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
 # 定义网络中需要使用的参数
 # 第一个参数是参数的名字，第二个参数是参数的默认值，第三个是参数的描述
@@ -23,10 +27,12 @@ tf.flags.DEFINE_float("l2_lamda", 0.0, "L2正则化项系数")
 
 # 训练模型使用的参数
 tf.flags.DEFINE_integer("batch_size", 64, "batch_size")
-tf.flags.DEFINE_integer("num_epoches", 200, "训练轮数")
-tf.flags.DEFINE_integer("evaluate_every", 50, "每隔多少轮输出一次模型预测值")
-tf.flags.DEFINE_integer("checkpoint_every", 100, "每隔多少轮保存一次模型")
+tf.flags.DEFINE_integer("num_epoches", 50, "训练轮数")
+tf.flags.DEFINE_integer("evaluate_every", 200, "每隔多少轮输出一次模型预测值")
+tf.flags.DEFINE_integer("checkpoint_every", 400, "每隔多少轮保存一次模型")
 tf.flags.DEFINE_integer("num_checkpoints", 5, "最多保存的模型个数，多余的模型会覆盖前面的模型")
+model_save_path = r"E:\python\PythonSpace\Data\cnn_vs_text\model\my-model"
+tf.flags.DEFINE_string("model_save_path", model_save_path, "模型保存文件夹地址")
 
 # session的配置参数
 tf.flags.DEFINE_boolean("allow_soft_placement", True, "当指定设备不存在时，是否自动分配其它设备")
@@ -80,9 +86,67 @@ with tf.Graph().as_default():
                      # vocab_processor.vocabulary_：返回的是一个字典，这个字典中是每个单词
                      # 与序号的对应关系，字典的长度是单词数加1，因为字典中还包含一个“<UNK>”
                      vocab_size=len(vocab_processor.vocabulary_),
-                     embedding_size=params["word_vec_dim"], # 词向量长度
-                     conv_sizes=params["conv_sizes"], # 有多少个不同大小的卷积核
+                     # 词向量长度
+                     embedding_size=params["word_vec_dim"],
+                     # 有多少个不同大小的卷积核
+                     conv_sizes=list(map(int, params["conv_sizes"].split(","))),
                      num_convs=params["num_convs"], # 每一类不同大小的卷积核中，包含多少个卷积核
                      l2_lamda=params["l2_lamda"])
+
+        # 指定优化器和训练方式
+        global_step = tf.Variable(0, name="gloabl_step", trainable=False)
+        optimizer = tf.train.AdamOptimizer(1e-4)
+        # 查看变量的梯度值
+        grads_and_variables = optimizer.compute_gradients(cnn.cost)
+        train_op = optimizer.apply_gradients(grads_and_variables, global_step=global_step)
+
+        # 保存模型
+        saver = tf.train.Saver(tf.global_variables(), max_to_keep=params["num_checkpoints"])
+
+        # 初始化参数
+        sess.run(tf.global_variables_initializer())
+
+        # 定义训练方法
+        def train_step(x_batch, y_batch):
+            feed_dict = {cnn.x: x_batch, cnn.y: y_batch,
+                         cnn.dropout_keep_prob: params["dropout_keep_prob"]}
+            # 查看中间结果
+            _, step, cost, accuracy = sess.run([train_op, global_step, cnn.cost, cnn.accuracy],
+                                               feed_dict=feed_dict)
+            if step % 10 == 0:
+                print("step：%s，cost：%.3f，accuracy：%.3f" % (step, cost, accuracy))
+
+        # 定义测试方法
+        def test_step(x_test, y_test):
+            feed_dict = {cnn.x: x_test, cnn.y: y_test, cnn.dropout_keep_prob: 1.0}
+            cost, accuracy = sess.run([cnn.cost, cnn.accuracy], feed_dict=feed_dict)
+            print("Testing result：cost = %.3f，accuracy = %.3f" % (cost, accuracy))
+
+        start_time = time.time()
+        for epoch in range(params["num_epoches"]):
+            print("\n---第%03d轮训练---\n" % (epoch+1))
+            data_size = len(x_train)
+            batch_nums = int((data_size - 1) / params["batch_size"]) + 1
+            shuffle_index = np.random.permutation(np.arange(len(x_train)))
+            shuffled_x = x_train[shuffle_index]
+            shuffled_y = y_train[shuffle_index]
+            for batch_num in range(batch_nums):
+                start_index = batch_num * params["batch_size"]
+                end_index = min((batch_num + 1) * params["batch_size"], data_size)
+                x_batch = shuffled_x[start_index: end_index]
+                y_batch = shuffled_y[start_index: end_index]
+                train_step(x_batch, y_batch)
+                # 获得当前迭代轮数
+                current_step = tf.train.global_step(sess, global_step)
+                if current_step % params["evaluate_every"] == 0:
+                    print("---------Evaluation---------")
+                    test_step(x_test, y_test)
+                    print("----------------------------")
+                if current_step % params["checkpoint_every"] == 0:
+                    saver.save(sess, save_path=params["model_save_path"], global_step=current_step)
+                    print("----------Save model!------------")
+        end_time = time.time()
+        print("总用时：%.3f分钟" % ((end_time-start_time)/60))
+
 
 
