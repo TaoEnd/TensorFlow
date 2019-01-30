@@ -7,7 +7,7 @@ import os
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
-path = r"E:\python\PythonSpace\Data\mnist\data"
+path = r"D:\python\PythonSpace\Data\mnist\data"
 mnist = input_data.read_data_sets(path, one_hot=True)
 x_train, x_test, y_train, y_test = mnist.train.images, mnist.test.images, \
 								   mnist.train.labels, mnist.test.labels
