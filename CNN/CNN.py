@@ -3,7 +3,7 @@
 import tensorflow as tf
 from tensorflow.examples.tutorials.mnist import input_data
 
-path = r"E:\python\PythonSpace\Data\mnist\data"
+path = r"D:\python\PythonSpace\Data\mnist\data"
 mnist = input_data.read_data_sets(path, one_hot=True)
 
 # 定义初始化权重函数
@@ -24,7 +24,7 @@ def init_conv(x, w):
     # w也是一个四维向量，[height, width, in_channels，out_channels]，
     # in_channels、out_channels分别表示输入、输出的通道数
     # strides表示步长，strides[1]、strides[2]分别表示x,y方向的移动步长
-    return tf.nn.conv2d(x, w, strides=[1, 1, 1, 1], padding="same")
+    return tf.nn.conv2d(x, w, strides=[1, 1, 1, 1], padding="SAME")
 
 # 定义池化层
 def init_pool(x):
